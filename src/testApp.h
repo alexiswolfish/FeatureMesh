@@ -6,6 +6,10 @@
 #include "ofxDelaunay.h"
 
 #include "ofxUI.h"
+
+#include "fmVert.h"
+#include "fmVertController.h"
+
 #include <iostream>
 
 class testApp : public ofBaseApp{
@@ -15,6 +19,7 @@ class testApp : public ofBaseApp{
 		void draw();
 		
 		void keyPressed(int key);
+        void exit();
 		void keyReleased(int key);
 		void mouseMoved(int x, int y);
 		void mouseDragged(int x, int y, int button);
@@ -33,9 +38,10 @@ class testApp : public ofBaseApp{
     int featureMax;
     float featureQuality;
     int featureMinDist;
-    bool featureDraw;
     
+    bool featureDraw;
     bool triDraw;
+    bool particleDraw;
         
     ofImage img;
     ofImage bwImg;
@@ -50,12 +56,21 @@ class testApp : public ofBaseApp{
     std::vector<ofPoint> featurePoints;
     
     /*----------------------------------*
+     Particle Variables
+     *----------------------------------*/
+    fmVertController particles;
+    float rep;
+    
+    /*----------------------------------*
      Gui Features
      *----------------------------------*/
     
     ofxUICanvas *gui;
     
     void guiEvent(ofxUIEventArgs &e);
+    
+    float vidOffsetX, vidOffsetY;
+    float labelOffset;
     
     
     
