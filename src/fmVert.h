@@ -11,10 +11,12 @@ class fmVert{
     
 public:
     
-    fmVert(ofVec3f initLoc, float _id);
+    fmVert(ofVec3f initLoc, float _maxSpeed, float _id);
     
     //updates the Particle's position in space
     void update();
+    void pullToCenter(ofVec3f center);
+    
     void draw();
     void draw(ofColor color);
     
@@ -27,6 +29,9 @@ public:
     float decay;
     float mass;
     float radius;
+    
+    float maxSpeed;
+    float maxSpeedSq;
     
     float id;
 };

@@ -17,12 +17,20 @@ void testApp::setup(){
     
     featureDraw = false;
     triDraw = false;
-    particleDraw = true;
+    particleDraw = false;
+    trackerDraw = true;
     
     /*--------Particles-----------*/
+    rep =.2;
+    maxSpeed = 3;
+    maxDist = 50;
+    
     particles = fmVertController(video.width, video.height);
-    particles.setNumVerticies(featureMax);
-    rep =3;
+    particles.setNumVerticies(featureMax, maxSpeed);
+    
+    /*--------Tracker-----------*/
+    
+    trackerMaxDist = 100;
     
     /*--------GUI-----------*/
     vidOffsetX = 900 - video.width;
@@ -36,17 +44,24 @@ void testApp::setup(){
     
     gui->addWidgetDown(new ofxUILabel("FEATURE DETECTION", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
-    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, false, "draw feature mesh", OFX_UI_FONT_MEDIUM));
-    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, false, "draw triangulation", OFX_UI_FONT_MEDIUM));
+    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, featureDraw, "draw feature mesh", OFX_UI_FONT_MEDIUM));
+    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, triDraw, "draw triangulation", OFX_UI_FONT_MEDIUM));
     gui->addWidgetDown(new ofxUIRotarySlider(dim*4, 50, 2000, featureMax, "max number of features")); 
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0.001, 0.02, featureQuality, "feature quality")); 
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 30, featureMinDist, "feature distance"));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
+    gui->addWidgetDown(new ofxUILabel("TRACKER", OFX_UI_FONT_LARGE));
+    gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
+    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, trackerDraw, "draw tracked points", OFX_UI_FONT_MEDIUM));
+    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 500, trackerMaxDist, "max Tracked Distance"));
+    
     gui->addWidgetDown(new ofxUILabel("PARTICLE CONTROL", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
-    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, true, "draw particle mesh", OFX_UI_FONT_MEDIUM));
+    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, particleDraw, "draw particle mesh", OFX_UI_FONT_MEDIUM));
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 50, 5000, featureMax, "number of particles")); 
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 5, rep, "repulsion")); 
+    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 10, maxSpeed, "max particle speed")); 
+    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, .001, 1, rep, "repulsion")); 
+    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 380, maxDist, "max pull distance")); 
     
     ofAddListener(gui->newGUIEvent,this,&testApp::guiEvent);
     /*-------------------*/
@@ -73,23 +88,59 @@ void testApp::update(){
     //pull new feature points from the current frame
     featurePoints = featureDetect();
     
-  
-    //triangulate the found points using ofxTriangle
-    triangle.clear();
-    triangle.triangulate(featurePoints);
+    /*------------Tracking-------------*/
+   // tracker.setPersistence(persistance);
+    // tracker.setMaximumDistance(trackerMaxDist);
+    
+    tracker.track(ofxCv::toCv(featurePoints));
+    
+    //create a new vector only comprised of points that haven't moved
+    //too much between frames
+    trackedPoints.clear();
+    for(int curIndex : tracker.getCurrentLabels()){
+        if(tracker.existsPrevious(curIndex)){
+            ofxCv::Point2f& prev = tracker.getPrevious(curIndex);
+            ofxCv::Point2f& cur = tracker.getCurrent(curIndex);
+            
+            ofVec2f dir = ofxCv::toOf(prev) - ofxCv::toOf(cur);
+            float dist = dir.length();
+            
+            if(dist < trackerMaxDist)
+                trackedPoints.push_back(cur);
+        }
+    }
+    
+    if(trackerDraw){
+        dTriangles.reset();
+        dTriangles.setMaxPoints(trackedPoints.size());
+        
+        for(ofxCv::Point2f p : trackedPoints)
+            dTriangles.addPoint(ofxCv::toOf(p));
+        
+        dTriangles.triangulate();
+    }
+    /*---------------------------------*/
+    
     
     //triangulate the found points using ofxDelauay
-    dTriangles.reset();
-    dTriangles.setMaxPoints(featureMax);
+    if(featureDraw){
+        dTriangles.reset();
+        dTriangles.setMaxPoints(featureMax);
     
-    for(ofPoint p: featurePoints)
-        dTriangles.addPoint(p);
+        for(ofPoint p: featurePoints)
+            dTriangles.addPoint(p);
     
-    dTriangles.triangulate();
+        dTriangles.triangulate();
+    }
     
     /*------------update particles-------------*/
-    particles.separate(rep);
-    particles.update();
+    
+    if(particleDraw){
+        particles.separate(rep);
+        //particles.attract(rep*rep, 0.65);
+        particles.pullToFeature(featurePoints, maxDist);
+        particles.update();
+    }
     
     
 }
@@ -133,18 +184,29 @@ void testApp::draw(){
         }
     }
 	
-    else if(triDraw){
+    if(triDraw){
         ofSetColor(255,0,0);
         ofNoFill();
         //triangle.draw();
         dTriangles.draw();
         
         ofSetColor(0, 255, 255);
-        for(ofPoint p : featurePoints){
+       // for(ofPoint p : featurePoints){
+        for(ofxCv::Point2f p : trackedPoints)
             ofEllipse(p.x, p.y, 2, 2);
+    }
+    if(trackerDraw){
+        
+        for(int curIndex : tracker.getCurrentLabels()){
+            if(tracker.existsPrevious(curIndex)){
+                cv::Point2f& prev = tracker.getPrevious(curIndex);
+                cv::Point2f& cur = tracker.getCurrent(curIndex);
+                
+                ofSetColor(255,0, (curIndex%255));
+                ofLine(prev.x, prev.y, cur.x, cur.y);
+            }
         }
     }
-    
     else if(particleDraw){
         particles.draw();
     }
@@ -227,14 +289,29 @@ void testApp::guiEvent(ofxUIEventArgs &e){
     else if(name == "number of particles")
 	{
 		ofxUISlider *slider = (ofxUISlider *) e.widget; 
-        particles.setNumVerticies(slider->getScaledValue());
+        particles.setNumVerticies(slider->getScaledValue(), maxSpeed);
 	}
     else if(name == "repulsion")
 	{
 		ofxUISlider *slider = (ofxUISlider *) e.widget; 
         rep = (slider->getScaledValue());
 	}
-   
+    else if(name == "max particle speed")
+	{
+		ofxUISlider *slider = (ofxUISlider *) e.widget; 
+        maxSpeed = (slider->getScaledValue());
+	}
+    else if(name == "max pull distance")
+	{
+		ofxUISlider *slider = (ofxUISlider *) e.widget; 
+        maxDist = (slider->getScaledValue());
+	}
+    else if(name == "draw tracked points")
+	{
+		ofxUILabelToggle *toggle = (ofxUILabelToggle *) e.widget;
+        trackerDraw = toggle->getValue();
+	}
+    
 }
 
 //--------------------------------------------------------------
@@ -254,7 +331,7 @@ void testApp::mouseDragged(int x, int y, int button){
 
 //--------------------------------------------------------------
 void testApp::mousePressed(int x, int y, int button){
-    particles.addVerticies(1, ofVec3f(mouseX, mouseY, 0));
+    particles.addVerticies(1, maxSpeed, ofVec3f(mouseX, mouseY, 0));
 }
 
 //--------------------------------------------------------------

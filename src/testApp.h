@@ -42,6 +42,7 @@ class testApp : public ofBaseApp{
     bool featureDraw;
     bool triDraw;
     bool particleDraw;
+    bool trackerDraw;
         
     ofImage img;
     ofImage bwImg;
@@ -56,10 +57,22 @@ class testApp : public ofBaseApp{
     std::vector<ofPoint> featurePoints;
     
     /*----------------------------------*
+     Tracker
+     *----------------------------------*/
+    ofxCv::PointTracker tracker;
+    std::vector<unsigned int> curTrackedPoints;
+    std::vector<unsigned int> prevTrackedPoints;
+    
+    float trackerMaxDist;
+    std::vector<cv::Point2f> trackedPoints;
+    
+    /*----------------------------------*
      Particle Variables
      *----------------------------------*/
     fmVertController particles;
     float rep;
+    float maxSpeed;
+    float maxDist;
     
     /*----------------------------------*
      Gui Features
