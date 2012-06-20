@@ -33,6 +33,20 @@ void fmVertController::draw(ofImage img){
         
 }
 
+void fmVertController::setSpeed(int maxSpeed){
+    for(vector<fmVert>::iterator v1 = verts.begin(); v1 != verts.end(); ++v1){
+        v1->maxSpeed = maxSpeed;
+    }
+}
+/*--------------------------------------------*
+ Pull points to the corresponding tracker point
+ *--------------------------------------------*/
+void fmVertController::pullToTracker(ofxCv::PointTracker tracker){
+    for(vector<fmVert>::iterator v = verts.begin(); v != verts.end(); ++v){
+        
+    }
+}
+
 /*-----------------------------------*
  Pull points to the feature points
  *-----------------------------------*/
@@ -43,6 +57,25 @@ void fmVertController::pullToFeature(vector<ofPoint> features, float maxDist){
         //apply attraction to each particle relative to distance
         for(vector<fmVert>::iterator v = verts.begin(); v != verts.end(); ++v){
             ofVec3f dir = v->loc - f;
+            float dist = dir.length();
+            
+            //only apply forces within a certain radius?
+            //might want to just say if dist >0
+            //also has to be less strong than the repulsion force
+            if(dist < maxDist){
+                dir.normalize();
+                v->vel -= dir * (dist) * (1/(dist*dist));
+            }
+        }
+    }
+}
+
+void fmVertController::pullToFeature(std::vector<cv::Point2f> features, float maxDist){
+    //iterate through each point returned by the feature detection
+    for(cv::Point2f f : features){
+        //apply attraction to each particle relative to distance
+        for(vector<fmVert>::iterator v = verts.begin(); v != verts.end(); ++v){
+            ofVec3f dir = v->loc - ofxCv::toOf(f);
             float dist = dir.length();
             
             //only apply forces within a certain radius?

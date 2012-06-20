@@ -34,6 +34,7 @@ class testApp : public ofBaseApp{
      and mesh generation functions and vars
      *----------------------------------*/
     vector<ofPoint> featureDetect();
+    ofColor colorSample(int x, int  y);
     
     int featureMax;
     float featureQuality;
@@ -43,6 +44,8 @@ class testApp : public ofBaseApp{
     bool triDraw;
     bool particleDraw;
     bool trackerDraw;
+    
+    bool useTrackedPoints;
         
     ofImage img;
     ofImage bwImg;
@@ -63,7 +66,10 @@ class testApp : public ofBaseApp{
     std::vector<unsigned int> curTrackedPoints;
     std::vector<unsigned int> prevTrackedPoints;
     
-    float trackerMaxDist;
+    int trackerMaxDist;
+    int persistance;
+    int age;
+   // int maxTrackedPointDist;
     std::vector<cv::Point2f> trackedPoints;
     
     /*----------------------------------*
@@ -79,6 +85,10 @@ class testApp : public ofBaseApp{
      *----------------------------------*/
     
     ofxUICanvas *gui;
+    ofxUICanvas *gui2;
+    
+    ofxUIMovingGraph *fpSize; 
+    ofxUIMovingGraph *tpSize; 
     
     void guiEvent(ofxUIEventArgs &e);
     

@@ -8,6 +8,7 @@
 
 #include "fmVert.h"
 #include "ofMain.h"
+#include "ofxCv.h"
 
 class fmVertController{
 public:
@@ -22,10 +23,14 @@ public:
     void removeVerticies(int num);
     void setNumVerticies(int num, float maxSpeed);
     
+    void setSpeed(int maxSpeed);
+    
     void separate(float repulsion);
     void attract(float repulsion, float attract);
     
     void pullToFeature(std::vector<ofPoint> features, float maxDist);
+    void pullToFeature(std::vector<cv::Point2f> features, float maxDist);
+    void pullToTracker(ofxCv::PointTracker tracker);
 
     std::vector<fmVert> verts;
     
