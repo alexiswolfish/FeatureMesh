@@ -2,6 +2,8 @@
 
 //--------------------------------------------------------------
 void testApp::setup(){
+    
+    //load your video file here. This bit is antiquated for testing
     img.loadImage("regine.png");
     bwImg.loadImage("regine.png");
     bwImg.setImageType(OF_IMAGE_GRAYSCALE);
@@ -20,6 +22,7 @@ void testApp::setup(){
     particleDraw = false;
     trackerDraw = true;
     useTrackedPoints = true;
+    
     /*--------Particles-----------*/
     rep =.2;
     maxSpeed = 3;
@@ -40,8 +43,10 @@ void testApp::setup(){
     labelOffset = 20;
     float dim = 16;
     
-  //  setFont(OFX_UI_FONT_NAME,true, true, false, 0.0, OFX_UI_FONT_RESOLUTION);
+    //huge gui setup, put in clean seperate function later
     
+    //ofxUi doesn't update your variables for you, so if you add any extra toggles,
+    //make sure to add the corresponding vars to the gui catch all function below.
     vector<string> names;
     names.push_back("feature points");
     names.push_back("tracker points");
@@ -49,6 +54,7 @@ void testApp::setup(){
     gui = new ofxUICanvas(0,0,vidOffsetX, ofGetHeight());
     gui->addWidgetDown(new ofxUIRadio( dim, dim, "point arrays", names, OFX_UI_ORIENTATION_HORIZONTAL));
     
+    //Feature Detection panel
     gui->addWidgetDown(new ofxUILabel("FEATURE DETECTION", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
     gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, featureDraw, "draw feature mesh", OFX_UI_FONT_MEDIUM));
@@ -57,6 +63,8 @@ void testApp::setup(){
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0.001, 0.02, featureQuality, "feature quality")); 
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 30, featureMinDist, "feature distance"));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
+    
+    //Tracker panel
     gui->addWidgetDown(new ofxUILabel("TRACKER", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
     gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, trackerDraw, "draw tracked points", OFX_UI_FONT_MEDIUM));
@@ -64,6 +72,7 @@ void testApp::setup(){
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 50, persistance, "tracked point persistance"));
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 100, age, " tracked point age"));
     
+    //Particle control
     gui->addWidgetDown(new ofxUILabel("PARTICLE CONTROL", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
     gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, particleDraw, "draw particle mesh", OFX_UI_FONT_MEDIUM));
@@ -75,6 +84,7 @@ void testApp::setup(){
     ofAddListener(gui->newGUIEvent,this,&testApp::guiEvent);
     /*-------------------*/
     
+    //debugging graphs to see the size of the tracked points/the feature points frame by frame
     int bufferSize = 256; 
     vector<float> buffer; 
     for(int i = 0; i < bufferSize; i++)

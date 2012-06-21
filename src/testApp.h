@@ -1,3 +1,17 @@
+/*----------------------------------------------*
+ openFrameworks sketch for experimenting (err mostly debugging)
+ feature detection and mesh building off of a video. 
+ 
+ Toggle between using the thresholded tracked points
+ to control jitter or the feature detection straight up
+ on top.
+ 
+ Make sure that the particles are turned off unless
+ you want them, since they kill the framerate.
+ 
+ Alex Wolfe @ the Studio for Creative Inquiry 
+ *----------------------------------------------*/
+
 #pragma once
 
 #include "ofMain.h"
@@ -30,8 +44,7 @@ class testApp : public ofBaseApp{
 		void gotMessage(ofMessage msg);
     
     /*----------------------------------*
-     Alex's feature detection 
-     and mesh generation functions and vars
+     Feature Detection
      *----------------------------------*/
     vector<ofPoint> featureDetect();
     ofColor colorSample(int x, int  y);
