@@ -11,11 +11,13 @@ void testApp::setup(){
     video.loadMovie("regineMov.mov");
     video.play();
     
+    /*--------Feature Detection-----------*/
     featureMax = 1500;
     featureQuality = 0.001;
     featureMinDist = 4;
     
-    dTriangles.setMaxPoints(featureMax);
+    //remnant from old ofxDelaunay build
+  //  dTriangles.setMaxPoints(featureMax);
     
     featureDraw = false;
     triDraw = false;
@@ -41,6 +43,336 @@ void testApp::setup(){
     vidOffsetX = 900 - video.width;
     vidOffsetY = (600 - video.height)/2;
     labelOffset = 20;
+    
+    guiSetup();
+    
+    /*--------Game Camera------*/
+    cam.setup();
+    cam.speed = 20;
+    cam.autosavePosition = true;
+    cam.targetNode.setPosition(ofVec3f());
+    cam.targetNode.setOrientation(ofQuaternion());
+    cam.targetXRot = -180;
+    cam.targetYRot = 0;
+    cam.rotationZ = 0;    
+    cam.setScale(1,-1,1);
+    
+    /*-------------------*/
+    //random stuff from James' code that I need to figure out what they do
+    renderMode = false;
+    farClip = 1245;
+    calculateRects();
+    loadDefaultScene();
+    
+    ofEnableSmoothing(); 
+}
+
+//--------------------------------------------------------------
+bool testApp::loadNewScene(){
+    ofFileDialogResult r = ofSystemLoadDialog("Select a Scene", true);
+    if(r.bSuccess){
+        return loadScene(r.getPath());
+    }
+    return false;
+}
+
+bool testApp::loadDefaultScene(){
+    ofxXmlSettings settings;
+    if(settings.loadFile("RGBDSimpleSceneDefaults.xml")){
+        if(!loadScene(settings.getValue("defaultScene", ""))){
+            return loadNewScene();
+        }
+        return true;
+    }
+    return loadNewScene();
+}
+
+bool testApp::loadScene(string takeDirectory){
+    if(player.setup(takeDirectory, true)){
+        ofxXmlSettings settings;
+        settings.loadFile("RGBDSimpleSceneDefaults.xml");
+        settings.setValue("defaultScene", player.getScene().mediaFolder);
+        settings.saveFile();
+        
+        meshBuilder.setup(player.getScene().calibrationFolder);
+        
+        //populate
+        player.getVideoPlayer().setPosition(.5);
+        player.update();
+        
+        meshBuilder.setXYShift(player.getXYShift());
+        //this will compensate if we are using an offline video that is of a different scale
+        //meshBuilder.setTextureScaleForImage(player.getVideoPlayer()); 
+        //update the first mesh
+        meshBuilder.updateMesh(player.getDepthPixels());
+        
+        return true;
+    }
+    return false;
+}
+
+//--------------------------------------------------------------
+void testApp::update(){
+    
+    ofBackground(180);
+    
+    //JG bleeeh
+    //Rects + Camera update
+      cam.applyRotation = cam.applyTranslation = meshRect.inside(mouseX, mouseY) || triangulatedRect.inside(mouseX, mouseY);
+    //put stuff if you want to screw with Jon's alignment here (TODO)
+    meshBuilder.updateMesh(player.getDepthPixels());
+    
+    /*---------------Update player----------------*/
+
+    player.update();
+    if(player.isFrameNew())
+        meshBuilder.updateMesh(player.getDepthPixels());
+    player.getVideoPlayer().setFrame( player.getVideoPlayer().getCurrentFrame() + 1);
+    player.update(); //Do I really want to call update twice here? TODO
+    
+    //update image to current frame
+    //this is probably all depricated.
+    img.clear();
+    //img = ofImage(video.getPixelsRef());
+    img.setUseTexture(false);
+    img.setFromPixels(player.getVideoPlayer().getPixelsRef());
+
+    bwImg.clear();
+    bwImg = ofImage(img.getPixelsRef());
+    bwImg.setImageType(OF_IMAGE_GRAYSCALE);
+    
+    //empty point vectors
+    harrisPoints.clear();
+    featurePoints.clear();
+    
+    //pull new feature points from the current frame
+    featurePoints = featureDetect();
+    
+    /*------------Tracking-------------*/
+     tracker.setPersistence(persistance);
+     tracker.setMaximumDistance(trackerMaxDist);
+    
+    tracker.track(ofxCv::toCv(featurePoints));
+    
+    //create a new vector only comprised of points that haven't moved
+    //too much between frames
+    trackedPoints.clear();
+    
+    for(int curIndex : tracker.getCurrentLabels()){
+        if(tracker.existsPrevious(curIndex)){
+            ofxCv::Point2f& prev = tracker.getPrevious(curIndex);
+            ofxCv::Point2f& cur = tracker.getCurrent(curIndex);
+            
+            ofVec2f dir = ofxCv::toOf(prev) - ofxCv::toOf(cur);
+            float dist = dir.length();
+
+            trackedPoints.push_back(cur);
+        }
+    }
+    /*---------------Triangulate------------------*/
+    
+    
+    //triangulate the found points using ofxDelaunay
+
+    dTriangles.reset();
+  //      dTriangles.setMaxPoints(featureMax); //depricated ofxDelaunay Call
+    
+    if(useTrackedPoints){
+        for(cv::Point2f p : trackedPoints)
+            dTriangles.addPoint(ofxCv::toOf(p));
+    }
+    else{
+        for(ofPoint p: featurePoints)
+            dTriangles.addPoint(p);
+    }
+        dTriangles.triangulate();
+
+    
+    /*------------update particles-------------*/
+    
+    if(particleDraw){
+        particles.separate(rep);
+        //particles.attract(rep*rep, 0.65);
+        particles.pullToFeature(trackedPoints, maxDist);
+        particles.update();
+    }
+    
+     /*------------update GUI-------------*/
+    
+    fpSize->addPoint(featurePoints.size());
+    tpSize->addPoint(trackedPoints.size());
+}
+
+//minDist should be (simplify/2)^2
+void testApp::createTriangleMesh(float minDist){
+    triangulatedMesh.clear();
+    vector<ofVec3f>& verts = dTriangles.triangleMesh.getVertices();
+    vector<ofVec2f>& textureCoords = meshBuilder.getMesh().getTexCoords();
+    vector<bool> validVertIndeces;
+    
+    //do a linear search to find the closest texture coordinate
+    for(ofVec3f v : verts){
+        int closestTexCoordIndex  = 0;
+        float closestTexCoordDistance = FLT_MAX;
+        
+        for(int j = 0; j < textureCoords.size(); j++){
+            float texCoordDist = textureCoords[j].distanceSquared(ofVec2f(v.x, v.y));
+            
+            if(texCoordDist < closestTexCoordDistance){
+                closestTexCoordDistance = texCoordDist;
+                closestTexCoordIndex = j;
+            }
+            //escape if its closer than a minDist so we don't search anymore
+            if(texCoordDist < minDist)
+                break;
+        }
+        //copy found verticies into our mesh
+        ofVec3f vert = meshBuilder.getMesh().getVertex(closestTexCoordIndex);
+        triangulatedMesh.addVertex(vert);
+        triangulatedMesh.addTexCoord(meshBuilder.getMesh().getTexCoord(closestTexCoordIndex));
+        validVertIndeces.push_back(vert.z < farClip && vert.z > 10);
+    }
+    
+    //copy indices across
+    for(int i = 0 ; i < dTriangles.triangleMesh.getNumIndices(); i+=3){
+        ofIndexType a,b,c;
+        a = dTriangles.triangleMesh.getIndex(i);
+        if(!validVertIndeces[a]) continue;
+        
+        b = dTriangles.triangleMesh.getIndex(i+1);
+        if(!validVertIndeces[b]) continue;
+        
+        c = dTriangles.triangleMesh.getIndex(i+2);
+        if(!validVertIndeces[c]) continue;
+        
+        triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i));
+        triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+1));
+        triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+2));
+    }
+    
+}
+//--------------------------------------------------------------
+void testApp::draw(){
+    img.draw(vidOffsetX, vidOffsetY);
+    
+    ofPushMatrix();
+    ofTranslate(vidOffsetX, vidOffsetY);
+    
+    //draw the mesh on the 2D image;
+    if(triDraw){
+        ofSetColor(255,0,0);
+        ofSetLineWidth(0.5);
+        ofNoFill();
+        dTriangles.draw();
+        
+        ofSetColor(0, 255, 255);
+    }
+    
+    //draw 2D triangulization abstraction on the image
+    if(featureDraw){
+        //argh getIndicies might be hella slow, you really want the pointer.
+        for( int i=0; i<dTriangles.triangleMesh.getIndices().size(); i+=3 )
+        {
+            float centerX, centerY;
+            unsigned char * imgPixels;
+            imgPixels= img.getPixels();
+            int colorIndex;
+            // t.points[ 0 ].y * img.width + t.points[ 0 ].x]
+            
+            //oh god, this may be absolutely catestrophic
+            //might want to make my own data struct to 
+            //save the triangles
+            ofVec3f a = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i)];
+            ofVec3f b = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+1)];
+            ofVec3f c = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+2)];
+
+            centerX = (a.x + b.x + c.x)/3;
+            centerY = (a.y + b.y + c.y)/3;
+                
+            ofFill();
+            ofColor triColor = colorSample(centerX, centerY);
+            //eh don't do this until its on a slider, probably not worth it
+            //triColor.setSaturation(triColor.getSaturation() + 10);
+            
+            ofSetColor(triColor);
+            ofTriangle(a.x,a.y,b.x,b.y,c.x,c.y);
+        }
+    }
+    if(trackerDraw){
+        ofSetLineWidth(1);
+        if(!useTrackedPoints){
+            for(ofPoint p : featurePoints)
+                ofEllipse(p.x, p.y, 2, 2);
+        }
+        for(int curIndex : tracker.getCurrentLabels()){
+            if(tracker.existsPrevious(curIndex)){
+                cv::Point2f& prev = tracker.getPrevious(curIndex);
+                cv::Point2f& cur = tracker.getCurrent(curIndex);
+                
+                ofSetColor(255,0, (curIndex%255));
+                ofLine(prev.x, prev.y, cur.x, cur.y);
+            }
+        }
+    }
+    else if(particleDraw){
+        particles.draw();
+    }
+    
+    ofPopMatrix();
+    
+
+    
+    ofSetColor(255);
+    
+}
+
+
+/*-------------------------------------------------*
+ use OpenCv's feature detection to pull out interesting points
+ *-------------------------------------------------*/
+vector<ofPoint> testApp::featureDetect(){
+    goodFeaturesToTrack(ofxCv::toCv(bwImg), harrisPoints, featureMax, (double)featureQuality, (double)featureMinDist);
+    return ofxCv::toOf(harrisPoints).getVertices();
+}
+
+/*-------------------------------------------------*
+JG bleeeh
+ *-------------------------------------------------*/
+void testApp::calculateRects(){
+    float rectWidth = ofGetWidth()/2;
+    float rectHeight = ofGetWidth()/2 * (9./16.);
+    videoRect = ofRectangle(rectWidth,0,rectWidth,rectHeight);
+    meshRect = ofRectangle(0,rectHeight,rectWidth,rectHeight);
+	triangulatedRect = ofRectangle(rectWidth,rectHeight,rectWidth,rectHeight);
+    renderFBO.allocate(rectWidth, rectHeight, GL_RGB, 4);
+    previewFBO.allocate(rectWidth, rectHeight, GL_RGB, 4);
+}
+
+//--------------------------------------------------------------
+void testApp::keyPressed(int key){
+    
+    if(key == 't'){
+        triDraw = !triDraw;
+    }
+    if( key == ' '){
+        if(video.isPlaying())
+            video.stop();
+        else {
+            video.play();
+        }
+    }
+}
+
+//--------------------------------------------------------------
+//Setup my awesome GUI
+
+void testApp::exit()
+{
+    gui->saveSettings("GUI/guiSettings.xml");
+    delete gui; 
+}
+
+void testApp::guiSetup(){
     float dim = 16;
     
     //huge gui setup, put in clean seperate function later
@@ -82,8 +414,7 @@ void testApp::setup(){
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 380, maxDist, "max pull distance")); 
     
     ofAddListener(gui->newGUIEvent,this,&testApp::guiEvent);
-    /*-------------------*/
-    
+
     //debugging graphs to see the size of the tracked points/the feature points frame by frame
     int bufferSize = 256; 
     vector<float> buffer; 
@@ -96,221 +427,8 @@ void testApp::setup(){
     fpSize = (ofxUIMovingGraph *) gui2->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 1500, "feature points size")); 
     gui2->addWidgetDown(new ofxUILabel("Tracked Points", OFX_UI_FONT_MEDIUM));
     tpSize = (ofxUIMovingGraph *) gui2->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 1500, "tracker points size")); 
-    /*-------------------*/
-    
-    ofEnableSmoothing(); 
+
 }
-
-
-//--------------------------------------------------------------
-void testApp::update(){
-    ofBackground(180);
-    
-    //update image to current frame
-    img.clear();
-    img = ofImage(video.getPixelsRef());
-    bwImg.clear();
-    bwImg = ofImage(img.getPixelsRef());
-    bwImg.setImageType(OF_IMAGE_GRAYSCALE);
-    
-    //empty point vectors
-    harrisPoints.clear();
-    featurePoints.clear();
-    
-    //pull new feature points from the current frame
-    featurePoints = featureDetect();
-    
-    /*------------Tracking-------------*/
-     tracker.setPersistence(persistance);
-     tracker.setMaximumDistance(trackerMaxDist);
-    
-    tracker.track(ofxCv::toCv(featurePoints));
-    
-    //create a new vector only comprised of points that haven't moved
-    //too much between frames
-    trackedPoints.clear();
-    
-    for(int curIndex : tracker.getCurrentLabels()){
-        if(tracker.existsPrevious(curIndex)){
-            ofxCv::Point2f& prev = tracker.getPrevious(curIndex);
-            ofxCv::Point2f& cur = tracker.getCurrent(curIndex);
-            
-            ofVec2f dir = ofxCv::toOf(prev) - ofxCv::toOf(cur);
-            float dist = dir.length();
-            
-            //if(dist < trackerMaxDist)
-            //if(tracker.getAge(curIndex) > age)
-                trackedPoints.push_back(cur);
-           // else
-           //     cout << dist << endl;
-        }
-    }
-    
-  /*  if(trackerDraw){
-        dTriangles.reset();
-        dTriangles.setMaxPoints(trackedPoints.size());
-        
-        for(ofxCv::Point2f p : trackedPoints)
-            dTriangles.addPoint(ofxCv::toOf(p));
-        
-        dTriangles.triangulate();
-    }*/
-    
-    /*---------------------------------*/
-    
-    
-    //triangulate the found points using ofxDelauay
-  //  if(featureDraw){
-        dTriangles.reset();
-        dTriangles.setMaxPoints(featureMax);
-    
-    if(useTrackedPoints){
-        for(cv::Point2f p : trackedPoints)
-            dTriangles.addPoint(ofxCv::toOf(p));
-    }
-    else{
-        for(ofPoint p: featurePoints)
-            dTriangles.addPoint(p);
-    }
-        dTriangles.triangulate();
-  //  }
-    
-    /*------------update particles-------------*/
-    
-    if(particleDraw){
-        particles.separate(rep);
-        //particles.attract(rep*rep, 0.65);
-        particles.pullToFeature(trackedPoints, maxDist);
-        particles.update();
-    }
-    
-     /*------------update GUI-------------*/
-    
-    fpSize->addPoint(featurePoints.size());
-    tpSize->addPoint(trackedPoints.size());
-}
-
-
-//--------------------------------------------------------------
-void testApp::draw(){
-    img.draw(vidOffsetX, vidOffsetY);
-    
-    ofPushMatrix();
-    ofTranslate(vidOffsetX, vidOffsetY);
-    
-    //draw the Triangles
-    if(featureDraw){
-        for( int i=0; i<dTriangles.triangles.size(); i++ )
-        {
-            float centerX, centerY;
-            unsigned char * imgPixels;
-            imgPixels= img.getPixels();
-            int colorIndex;
-            // t.points[ 0 ].y * img.width + t.points[ 0 ].x]
-            
-
-                ofxDelaunayTriangle& tri = dTriangles.triangles[ i ];
-                centerX = (tri.points[0].x + tri.points[1].x + tri.points[2].x)/3;
-                centerY = (tri.points[0].y + tri.points[1].y + tri.points[2].y)/3;
-                
-                ofFill();
-               // ofColor c = img.getColor(centerX, centerY);
-                ofColor c = colorSample(centerX, centerY);
-                c.setSaturation(c.getSaturation() + 10);
-                ofSetColor(c);
-                
-                ofTriangle
-                (
-                 tri.points[ 0 ].x,
-                 tri.points[ 0 ].y,
-                 tri.points[ 1 ].x,
-                 tri.points[ 1 ].y,
-                 tri.points[ 2 ].x,
-                 tri.points[ 2 ].y
-                 );
-        }
-    }
-	
-    
-    
-    if(triDraw){
-        ofSetColor(255,0,0);
-        ofSetLineWidth(0.5);
-        ofNoFill();
-        //triangle.draw();
-        dTriangles.draw();
-        
-        ofSetColor(0, 255, 255);
-      /*  if(useTrackedPoints){
-            for(ofxCv::Point2f p : trackedPoints)
-                ofEllipse(p.x, p.y, 2, 2);
-            }
-        else{
-            for(ofPoint p : featurePoints)
-                ofEllipse(p.x, p.y, 2, 2);
-        }*/
-    }
-    if(trackerDraw){
-        ofSetLineWidth(1);
-        if(!useTrackedPoints){
-            for(ofPoint p : featurePoints)
-                ofEllipse(p.x, p.y, 2, 2);
-        }
-        for(int curIndex : tracker.getCurrentLabels()){
-            if(tracker.existsPrevious(curIndex)){
-                cv::Point2f& prev = tracker.getPrevious(curIndex);
-                cv::Point2f& cur = tracker.getCurrent(curIndex);
-                
-                ofSetColor(255,0, (curIndex%255));
-                ofLine(prev.x, prev.y, cur.x, cur.y);
-            }
-        }
-    }
-    else if(particleDraw){
-        particles.draw();
-    }
-    
-    ofPopMatrix();
-    
-
-    
-    ofSetColor(255);
-    
-}
-
-
-/*-------------------------------------------------*
- use OpenCv's feature detection to pull out interesting points
- *-------------------------------------------------*/
-vector<ofPoint> testApp::featureDetect(){
-    goodFeaturesToTrack(ofxCv::toCv(bwImg), harrisPoints, featureMax, (double)featureQuality, (double)featureMinDist);
-    return ofxCv::toOf(harrisPoints).getVertices();
-}
-
-
-
-//--------------------------------------------------------------
-void testApp::keyPressed(int key){
-    
-    if(key == 't'){
-        triDraw = !triDraw;
-    }
-    if( key == ' '){
-        if(video.isPlaying())
-            video.stop();
-        else {
-            video.play();
-        }
-    }
-}
-
-//--------------------------------------------------------------
-void testApp::exit()
-{
-    gui->saveSettings("GUI/guiSettings.xml");
-    delete gui; 
-}
-
 //--------------------------------------------------------------
 void testApp::guiEvent(ofxUIEventArgs &e){
     string name = e.widget->getName(); 
