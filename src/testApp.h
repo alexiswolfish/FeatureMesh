@@ -16,8 +16,11 @@
 
 #include "ofMain.h"
 #include "ofxCv.h"
-#include "ofxTriangle.h"
 #include "ofxDelaunay.h"
+#include "ofxXmlSettings.h"
+#include "ofxGameCamera.h"
+#include "ofxRGBDPlayer.h"
+#include "ofxRGBDMeshBuilder.h"
 
 #include "ofxUI.h"
 
@@ -27,21 +30,48 @@
 #include <iostream>
 
 class testApp : public ofBaseApp{
-	public:
-		void setup();
-		void update();
-		void draw();
-		
-		void keyPressed(int key);
-        void exit();
-		void keyReleased(int key);
-		void mouseMoved(int x, int y);
-		void mouseDragged(int x, int y, int button);
-		void mousePressed(int x, int y, int button);
-		void mouseReleased(int x, int y, int button);
-		void windowResized(int w, int h);
-		void dragEvent(ofDragInfo dragInfo);
-		void gotMessage(ofMessage msg);
+public:
+    void setup();
+    void update();
+    void draw();
+    
+    //Core OF Utils
+    void keyPressed(int key);
+    void exit();
+    void keyReleased(int key);
+    void mouseMoved(int x, int y);
+    void mouseDragged(int x, int y, int button);
+    void mousePressed(int x, int y, int button);
+    void mouseReleased(int x, int y, int button);
+    void windowResized(int w, int h);
+    void dragEvent(ofDragInfo dragInfo);
+    void gotMessage(ofMessage msg);
+    
+    /*----------------------------------*
+     RGBD Toolkit + Mesh Creation
+     *----------------------------------*/
+    ofxRGBDPlayer player;
+    ofxRGBDMeshBuilder meshBuilder;
+    ofxGameCamera cam;
+    
+    ofRectangle roi;
+    ofFbo renderFBO;
+    ofFbo previewFBO;
+    
+    ofMesh triangulatedMesh;
+    
+    ofRectangle meshRect;
+    ofRectangle triangulatedRect;
+    ofRectangle videoRect;
+    
+    bool renderMode;
+    float farClip; //put into the GUI TODO
+    
+    void calculateRects();
+    bool loadNewScene();
+    bool loadDefaultScene();
+    bool loadScene(string takeDirectory);
+    int renderedVidoeFrame;
     
     /*----------------------------------*
      Feature Detection
@@ -59,18 +89,19 @@ class testApp : public ofBaseApp{
     bool trackerDraw;
     
     bool useTrackedPoints;
-        
+    
     ofImage img;
     ofImage bwImg;
     
     ofVideoPlayer video;
     
     ofxCv::ContourFinder contourFinder;
-    ofxTriangle triangle;
     ofxDelaunay dTriangles;
     
     std::vector<cv::Point2f> harrisPoints;
     std::vector<ofPoint> featurePoints;
+    
+    void createTriangleMesh(float minDist);
     
     /*----------------------------------*
      Tracker
@@ -82,7 +113,7 @@ class testApp : public ofBaseApp{
     int trackerMaxDist;
     int persistance;
     int age;
-   // int maxTrackedPointDist;
+    // int maxTrackedPointDist;
     std::vector<cv::Point2f> trackedPoints;
     
     /*----------------------------------*
@@ -103,6 +134,7 @@ class testApp : public ofBaseApp{
     ofxUIMovingGraph *fpSize; 
     ofxUIMovingGraph *tpSize; 
     
+    void guiSetup();
     void guiEvent(ofxUIEventArgs &e);
     
     float vidOffsetX, vidOffsetY;
