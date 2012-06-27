@@ -27,8 +27,8 @@ void testApp::setup(){
     labelOffset = 20;
     
     //random stuff from James' code that I need to figure out what they do
-    renderMode = false;
-    farClip = 1245;
+    renderMode = false; //stick this in as a button TODO
+    farClip = 1245; //this should be on a slider TODO
     
     calculateRects();
     loadDefaultScene();
@@ -224,29 +224,33 @@ void testApp::draw(){
             ofPopMatrix();
         }
         
-        renderFBO.begin();
-        ofClear(0,0,0,0);
-        //draw triangulated mesh
-        cam.begin();
-        ofPushMatrix();
-        ofPushStyle();
-        ofScale(1,-1, 1);
-        glEnable(GL_DEPTH_TEST);
-        player.getVideoPlayer().getTextureReference().bind();
-        ofEnableAlphaBlending();
-        ofSetColor(255, 255, 255, 100);
-        triangulatedMesh.draw();
-        ofSetLineWidth(4);
-        ofBlendMode(OF_BLENDMODE_ADD);
-        triangulatedMesh.drawWireframe();
-        player.getVideoPlayer().getTextureReference().unbind();
-        glDisable(GL_DEPTH_TEST);
-        ofPopStyle();
-        ofPopMatrix();
-        cam.end();
-        renderFBO.end();
-        
-        renderFBO.getTextureReference().draw(triangulatedRect);
+        if(triangulatedMesh.hasIndices()){
+            renderFBO.begin();
+            ofClear(0,0,0,0);
+            //draw triangulated mesh
+            cam.begin();
+            ofPushMatrix();
+            ofPushStyle();
+            ofScale(1,-1, 1);
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_FLAT);
+           // player.getVideoPlayer().getTextureReference().bind();
+            ofEnableAlphaBlending();
+            ofSetColor(255, 255, 255, 100);
+            triangulatedMesh.drawFaces();
+           // ofSetLineWidth(4);
+            //ofBlendMode(OF_BLENDMODE_ADD);
+           // triangulatedMesh.drawWireframe();
+           // player.getVideoPlayer().getTextureReference().unbind();
+            glDisable(GL_DEPTH_TEST);
+            ofPopStyle();
+            ofPopMatrix();
+            cam.end();
+            renderFBO.end();
+            
+            renderFBO.getTextureReference().draw(triangulatedRect);
+            cout << cam.getPosition() << " " <<cam.getOrientationEuler()<< endl;
+        }
     }
     
     //draw 2D triangulization abstraction on the image
@@ -408,6 +412,9 @@ void testApp::keyPressed(int key){
     
     if(key == 't'){
         triDraw = !triDraw;
+    }
+    if(key == ' '){
+        player.togglePlay();
     }
     /*    if( key == ' '){
      if(video.isPlaying())
