@@ -19,8 +19,11 @@ void testApp::setup(){
     cam.targetNode.setOrientation(ofQuaternion());
     cam.targetXRot = -180;
     cam.targetYRot = 0;
-    cam.rotationZ = 0;    
+    cam.rotationZ = 0;   
+    cam.setPosition(0, 158, 0);
     cam.setScale(1,-1,1);
+    
+   // cam.loadCameraPosition();
     
     vidOffsetX = 250;
     vidOffsetY = 100;
@@ -202,6 +205,8 @@ void testApp::update(){
     
     fpSize->addPoint(featurePoints.size());
     tpSize->addPoint(trackedPoints.size());
+    
+
 }
 
 //--------------------------------------------------------------
@@ -233,15 +238,43 @@ void testApp::draw(){
             ofPushStyle();
             ofScale(1,-1, 1);
             glEnable(GL_DEPTH_TEST);
-            glEnable(GL_FLAT);
-           // player.getVideoPlayer().getTextureReference().bind();
+            
+            
+            glShadeModel(GL_FLAT);
             ofEnableAlphaBlending();
             ofSetColor(255, 255, 255, 100);
+
+            unsigned char * imgPixels;
+            imgPixels= img.getPixels();
+            
+            
+            for( int i=0; i<triangulatedMesh.getIndices().size(); i+=3 ){
+                float centerX, centerY;
+                int colorIndex;
+                
+                ofVec3f a = triangulatedMesh.getVerticesPointer()[*(triangulatedMesh.getIndexPointer()+i)];
+                ofVec3f b = triangulatedMesh.getVerticesPointer()[*(triangulatedMesh.getIndexPointer()+i+1)];
+                ofVec3f c = triangulatedMesh.getVerticesPointer()[*(triangulatedMesh.getIndexPointer()+i+2)];
+                
+                ofSetColor(*(triangulatedMesh.getColorsPointer()+i/3));
+                           
+                ofTriangle(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z);
+            }
+            
+            
+            /*
+            player.getVideoPlayer().getTextureReference().bind();
+            ofEnableAlphaBlending();
+            ofSetColor(255, 255, 255, 100);
+            triangulatedMesh.draw();
             triangulatedMesh.drawFaces();
-           // ofSetLineWidth(4);
-            //ofBlendMode(OF_BLENDMODE_ADD);
-           // triangulatedMesh.drawWireframe();
-           // player.getVideoPlayer().getTextureReference().unbind();
+            ofSetLineWidth(4);
+            ofBlendMode(OF_BLENDMODE_ADD);
+            triangulatedMesh.drawWireframe();
+            player.getVideoPlayer().getTextureReference().unbind();
+            */
+            
+            
             glDisable(GL_DEPTH_TEST);
             ofPopStyle();
             ofPopMatrix();
@@ -249,7 +282,8 @@ void testApp::draw(){
             renderFBO.end();
             
             renderFBO.getTextureReference().draw(triangulatedRect);
-            cout << cam.getPosition() << " " <<cam.getOrientationEuler()<< endl;
+            cout << cam.getPosition() <<cam.getOrientationEuler()<< endl;
+            
         }
     }
     
@@ -265,10 +299,8 @@ void testApp::draw(){
         for( int i=0; i<dTriangles.triangleMesh.getIndices().size(); i+=3 )
         {
             float centerX, centerY;
-            unsigned char * imgPixels;
-            imgPixels= img.getPixels();
             int colorIndex;
-            // t.points[ 0 ].y * img.width + t.points[ 0 ].x]
+
             
             //oh god, this may be absolutely catestrophic
             //should find a cleaner way to do this
@@ -361,10 +393,6 @@ void testApp::createTriangleMesh(float minDist){
         c = dTriangles.triangleMesh.getIndex(i+2);
         if(!validVertIndeces[c]) continue;
         
-        //ofVec3f aColor = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i)];
-        //ofVec3f bColor = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+1)];
-        //ofVec3f cColor = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+2)];
-        
         ofVec3f aColor = dTriangles.triangleMesh.getVerticesPointer()[a];
         ofVec3f bColor = dTriangles.triangleMesh.getVerticesPointer()[b];
         ofVec3f cColor = dTriangles.triangleMesh.getVerticesPointer()[c];
@@ -374,12 +402,12 @@ void testApp::createTriangleMesh(float minDist){
         
         ofColor triColor = colorSample(centerX, centerY);
         
+        triangulatedMesh.addColor(triColor);
+        
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i));
-        triangulatedMesh.addColor(triColor);
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+1));
-        triangulatedMesh.addColor(triColor);
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+2));
-        triangulatedMesh.addColor(triColor);
+
     }
     
 }

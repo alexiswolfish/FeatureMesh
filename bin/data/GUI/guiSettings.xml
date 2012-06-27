@@ -1,22 +1,32 @@
 <Widget>
-    <Kind>17</Kind>
-    <Name>draw feature mesh</Name>
-    <Value>1</Value>
+    <Kind>2</Kind>
+    <Name>feature points</Name>
+    <Value>0</Value>
+</Widget>
+<Widget>
+    <Kind>2</Kind>
+    <Name>tracker points</Name>
+    <Value>0</Value>
 </Widget>
 <Widget>
     <Kind>17</Kind>
-    <Name>draw triangulization</Name>
+    <Name>draw feature mesh</Name>
+    <Value>0</Value>
+</Widget>
+<Widget>
+    <Kind>17</Kind>
+    <Name>draw triangulation</Name>
     <Value>0</Value>
 </Widget>
 <Widget>
     <Kind>21</Kind>
     <Name>max number of features</Name>
-    <Value>1282.24</Value>
+    <Value>1500</Value>
 </Widget>
 <Widget>
     <Kind>4</Kind>
     <Name>feature quality</Name>
-    <Value>0.0127958</Value>
+    <Value>0.001</Value>
 </Widget>
 <Widget>
     <Kind>4</Kind>
@@ -25,11 +35,46 @@
 </Widget>
 <Widget>
     <Kind>17</Kind>
+    <Name>draw tracked points</Name>
+    <Value>0</Value>
+</Widget>
+<Widget>
+    <Kind>4</Kind>
+    <Name>max tracked distance</Name>
+    <Value>64</Value>
+</Widget>
+<Widget>
+    <Kind>4</Kind>
+    <Name>tracked point persistance</Name>
+    <Value>15</Value>
+</Widget>
+<Widget>
+    <Kind>4</Kind>
+    <Name> tracked point age</Name>
+    <Value>5</Value>
+</Widget>
+<Widget>
+    <Kind>17</Kind>
     <Name>draw particle mesh</Name>
-    <Value>1</Value>
+    <Value>0</Value>
 </Widget>
 <Widget>
     <Kind>4</Kind>
     <Name>number of particles</Name>
-    <Value>1500</Value>
+    <Value>1000</Value>
+</Widget>
+<Widget>
+    <Kind>4</Kind>
+    <Name>max particle speed</Name>
+    <Value>3</Value>
+</Widget>
+<Widget>
+    <Kind>4</Kind>
+    <Name>repulsion</Name>
+    <Value>0.2</Value>
+</Widget>
+<Widget>
+    <Kind>4</Kind>
+    <Name>max pull distance</Name>
+    <Value>50</Value>
 </Widget>
