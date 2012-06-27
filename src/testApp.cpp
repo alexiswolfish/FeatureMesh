@@ -166,7 +166,7 @@ void testApp::update(){
             ofxCv::Point2f& prev = tracker.getPrevious(curIndex);
             ofxCv::Point2f& cur = tracker.getCurrent(curIndex);
             
-            ofVec2f dir = o/Users/golan/Desktop/alexfxCv::toOf(prev) - ofxCv::toOf(cur);
+            ofVec2f dir = ofxCv::toOf(prev) - ofxCv::toOf(cur);
             float dist = dir.length();
             
             trackedPoints.push_back(cur);
@@ -175,8 +175,7 @@ void testApp::update(){
     /*---------------Triangulate------------------*/
     
     //triangulate the found points using ofxDelaunay
-    if(featureDraw || triDraw || trackerDraw){
-        
+    if( featureDraw || triDraw || trackerDraw){
         dTriangles.reset();
         if(useTrackedPoints){
             for(cv::Point2f p : trackedPoints)
@@ -187,7 +186,6 @@ void testApp::update(){
                 dTriangles.addPoint(p);
         }
         dTriangles.triangulate();
-        
         createTriangleMesh(5.0);
     }
     
@@ -236,11 +234,11 @@ void testApp::draw(){
         glEnable(GL_DEPTH_TEST);
         player.getVideoPlayer().getTextureReference().bind();
         ofEnableAlphaBlending();
-       // ofSetColor(255, 255, 255, 100);
+        ofSetColor(255, 255, 255, 100);
         triangulatedMesh.draw();
-        //ofSetLineWidth(4);
-        //ofBlendMode(OF_BLENDMODE_ADD);
-       // triangulatedMesh.drawWireframe();
+        ofSetLineWidth(4);
+        ofBlendMode(OF_BLENDMODE_ADD);
+        triangulatedMesh.drawWireframe();
         player.getVideoPlayer().getTextureReference().unbind();
         glDisable(GL_DEPTH_TEST);
         ofPopStyle();
@@ -269,8 +267,7 @@ void testApp::draw(){
             // t.points[ 0 ].y * img.width + t.points[ 0 ].x]
             
             //oh god, this may be absolutely catestrophic
-            //might want to make my own data struct to 
-            //save the triangles
+            //should find a cleaner way to do this
             ofVec3f a = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i)];
             ofVec3f b = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+1)];
             ofVec3f c = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+2)];
@@ -336,8 +333,8 @@ void testApp::createTriangleMesh(float minDist){
                 closestTexCoordIndex = j;
             }
             //escape if its closer than a minDist so we don't search anymore
-            if(texCoordDist < minDist)
-                break;
+           // if(texCoordDist < minDist)
+            //    break;
         }
         //copy found verticies into our mesh
         ofVec3f vert = meshBuilder.getMesh().getVertex(closestTexCoordIndex);
@@ -349,6 +346,8 @@ void testApp::createTriangleMesh(float minDist){
     //copy indices across
     for(int i = 0 ; i < dTriangles.triangleMesh.getNumIndices(); i+=3){
         ofIndexType a,b,c;
+        float centerX, centerY;
+        
         a = dTriangles.triangleMesh.getIndex(i);
         if(!validVertIndeces[a]) continue;
         
@@ -358,9 +357,25 @@ void testApp::createTriangleMesh(float minDist){
         c = dTriangles.triangleMesh.getIndex(i+2);
         if(!validVertIndeces[c]) continue;
         
+        //ofVec3f aColor = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i)];
+        //ofVec3f bColor = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+1)];
+        //ofVec3f cColor = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+2)];
+        
+        ofVec3f aColor = dTriangles.triangleMesh.getVerticesPointer()[a];
+        ofVec3f bColor = dTriangles.triangleMesh.getVerticesPointer()[b];
+        ofVec3f cColor = dTriangles.triangleMesh.getVerticesPointer()[c];
+        
+        centerX = (aColor.x + bColor.x + cColor.x)/3;
+        centerY = (aColor.y + bColor.y + cColor.y)/3;
+        
+        ofColor triColor = colorSample(centerX, centerY);
+        
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i));
+        triangulatedMesh.addColor(triColor);
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+1));
+        triangulatedMesh.addColor(triColor);
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+2));
+        triangulatedMesh.addColor(triColor);
     }
     
 }
