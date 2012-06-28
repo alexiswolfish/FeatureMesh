@@ -11,7 +11,7 @@
 <Widget>
     <Kind>17</Kind>
     <Name>draw feature mesh</Name>
-    <Value>0</Value>
+    <Value>1</Value>
 </Widget>
 <Widget>
     <Kind>17</Kind>
@@ -55,26 +55,6 @@
 </Widget>
 <Widget>
     <Kind>17</Kind>
-    <Name>draw particle mesh</Name>
+    <Name>save frames</Name>
     <Value>0</Value>
-</Widget>
-<Widget>
-    <Kind>4</Kind>
-    <Name>number of particles</Name>
-    <Value>1000</Value>
-</Widget>
-<Widget>
-    <Kind>4</Kind>
-    <Name>max particle speed</Name>
-    <Value>3</Value>
-</Widget>
-<Widget>
-    <Kind>4</Kind>
-    <Name>repulsion</Name>
-    <Value>0.2</Value>
-</Widget>
-<Widget>
-    <Kind>4</Kind>
-    <Name>max pull distance</Name>
-    <Value>50</Value>
 </Widget>

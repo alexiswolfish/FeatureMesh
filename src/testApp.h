@@ -65,7 +65,7 @@ public:
     ofRectangle videoRect;
     
     bool renderMode;
-    float farClip; //put into the GUI TODO
+    float farClip, xShift, yShift;
     
     void calculateRects();
     bool loadNewScene();

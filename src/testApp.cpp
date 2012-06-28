@@ -20,18 +20,20 @@ void testApp::setup(){
     cam.targetXRot = -180;
     cam.targetYRot = 0;
     cam.rotationZ = 0;   
-    cam.setPosition(0, 158, 0);
+  //  cam.setPosition(0, 158, 0);
     cam.setScale(1,-1,1);
     
-   // cam.loadCameraPosition();
+    cam.loadCameraPosition();
     
     vidOffsetX = 250;
     vidOffsetY = 100;
     labelOffset = 20;
     
     //random stuff from James' code that I need to figure out what they do
-    renderMode = false; //stick this in as a button TODO
+    renderMode = false; 
     farClip = 1245; //this should be on a slider TODO
+    xShift = 0;
+    yShift = 0;
     
     calculateRects();
     loadDefaultScene();
@@ -65,68 +67,24 @@ void testApp::setup(){
     
     /*--------GUI-----------*/
     
-    guiSetup();
-    
-    /*-------------------*/
-    
-    
+    guiSetup();    
     ofEnableSmoothing(); 
-}
-
-//--------------------------------------------------------------
-bool testApp::loadNewScene(){
-    ofFileDialogResult r = ofSystemLoadDialog("Select a Scene", true);
-    if(r.bSuccess){
-        return loadScene(r.getPath());
-    }
-    return false;
-}
-
-bool testApp::loadDefaultScene(){
-    ofxXmlSettings settings;
-    if(settings.loadFile("RGBDSimpleSceneDefaults.xml")){
-        if(!loadScene(settings.getValue("defaultScene", ""))){
-            return loadNewScene();
-        }
-        return true;
-    }
-    return loadNewScene();
-}
-
-bool testApp::loadScene(string takeDirectory){
-    //use the low res, high kills my machine
-    if(player.setup(takeDirectory, false)){
-        ofxXmlSettings settings;
-        settings.loadFile("RGBDSimpleSceneDefaults.xml");
-        settings.setValue("defaultScene", player.getScene().mediaFolder);
-        settings.saveFile();
-        
-        meshBuilder.setup(player.getScene().calibrationFolder);
-        
-        //populate
-        player.getVideoPlayer().setPosition(.5);
-        player.update();
-        
-        meshBuilder.setXYShift(player.getXYShift());
-        //this will compensate if we are using an offline video that is of a different scale
-        //meshBuilder.setTextureScaleForImage(player.getVideoPlayer()); 
-        //update the first mesh
-        meshBuilder.updateMesh(player.getDepthPixels());
-        
-        return true;
-    }
-    return false;
 }
 
 //--------------------------------------------------------------
 void testApp::update(){
     
     ofBackground(180);
-    
-    //JG bleeeh
+
     //Rects + Camera update
     cam.applyRotation = cam.applyTranslation = meshRect.inside(mouseX, mouseY) || triangulatedRect.inside(mouseX, mouseY);
-    //put stuff if you want to screw with Jon's alignment here (TODO)
+    //copy any GUI changes into the mesh builder
+    if(meshBuilder.shift.x != xShift || meshBuilder.shift.y != yShift || meshBuilder.farClip != farClip){
+        meshBuilder.setXYShift( ofVec2f(xShift,yShift) );
+		meshBuilder.farClip = farClip;
+        meshBuilder.updateMesh(player.getDepthPixels());
+    }
+
     
     /*---------------Update player----------------*/
     
@@ -134,15 +92,10 @@ void testApp::update(){
     if(player.isFrameNew())
         meshBuilder.updateMesh(player.getDepthPixels());
     
-    player.getVideoPlayer().setFrame( player.getVideoPlayer().getCurrentFrame() + 1);
-    player.update(); //Do I really want to call update twice here? TODO
-    
     
     //update image to current frame
     img.clear();
-    //img.setUseTexture(false);
     img.setFromPixels(player.getVideoPlayer().getPixelsRef());
-    
     bwImg.clear();
     bwImg = ofImage(img.getPixelsRef());
     bwImg.setImageType(OF_IMAGE_GRAYSCALE);
@@ -157,18 +110,13 @@ void testApp::update(){
     /*------------Tracking-------------*/
     tracker.setPersistence(persistance);
     tracker.setMaximumDistance(trackerMaxDist);
-    
     tracker.track(ofxCv::toCv(featurePoints));
     
-    //create a new vector only comprised of points that haven't moved
-    //too much between frames
-    trackedPoints.clear();
-    
+    trackedPoints.clear();    
     for(int curIndex : tracker.getCurrentLabels()){
         if(tracker.existsPrevious(curIndex)){
             ofxCv::Point2f& prev = tracker.getPrevious(curIndex);
             ofxCv::Point2f& cur = tracker.getCurrent(curIndex);
-            
             ofVec2f dir = ofxCv::toOf(prev) - ofxCv::toOf(cur);
             float dist = dir.length();
             
@@ -178,7 +126,7 @@ void testApp::update(){
     /*---------------Triangulate------------------*/
     
     //triangulate the found points using ofxDelaunay
-    if( featureDraw || triDraw || trackerDraw){
+    if(featureDraw || triDraw || trackerDraw){
         dTriangles.reset();
         if(useTrackedPoints){
             for(cv::Point2f p : trackedPoints)
@@ -189,11 +137,19 @@ void testApp::update(){
                 dTriangles.addPoint(p);
         }
         dTriangles.triangulate();
-        createTriangleMesh(5.0);
+    }
+    /*------------Render out Triangulated Mesh-------------*/
+    if(dTriangles.triangleMesh.hasIndices() && !triangulatedMesh.hasIndices()){
+        createTriangleMesh(0.5);
     }
     
-    /*------------update particles-------------*/
+    if(renderMode){
+        player.getVideoPlayer().setFrame( player.getVideoPlayer().getCurrentFrame() + 1);
+        player.update();
+        createTriangleMesh(0.5);
+    }
     
+    /*------------update particles-------------*/ 
     if(particleDraw){
         particles.separate(rep);
         //particles.attract(rep*rep, 0.65);
@@ -202,19 +158,32 @@ void testApp::update(){
     }
     
     /*------------update GUI-------------*/
-    
     fpSize->addPoint(featurePoints.size());
     tpSize->addPoint(trackedPoints.size());
     
-
+    
 }
 
 //--------------------------------------------------------------
 void testApp::draw(){
     if(player.isLoaded()){
+        
+        //draw the 2D video
         player.getVideoPlayer().draw(videoRect);
         
-        //...with feature overlay
+        //draw standard generated mesh
+        previewFBO.begin();
+        ofClear(0,0,0,0);
+        cam.begin();
+        glEnable(GL_DEPTH_TEST);
+        meshBuilder.draw(player.getVideoPlayer());
+        glDisable(GL_DEPTH_TEST);
+        cam.end();
+        previewFBO.end();
+        previewFBO.getTextureReference().draw(meshRect);
+        
+        
+        //...2D with feature overlay
         if(triDraw){
             ofPushMatrix();
             ofTranslate(videoRect.x, videoRect.y);
@@ -239,15 +208,13 @@ void testApp::draw(){
             ofScale(1,-1, 1);
             glEnable(GL_DEPTH_TEST);
             
-            
-            glShadeModel(GL_FLAT);
+            //  glShadeModel(GL_FLAT);
             ofEnableAlphaBlending();
             ofSetColor(255, 255, 255, 100);
-
+            
             unsigned char * imgPixels;
             imgPixels= img.getPixels();
-            
-            
+               
             for( int i=0; i<triangulatedMesh.getIndices().size(); i+=3 ){
                 float centerX, centerY;
                 int colorIndex;
@@ -257,23 +224,18 @@ void testApp::draw(){
                 ofVec3f c = triangulatedMesh.getVerticesPointer()[*(triangulatedMesh.getIndexPointer()+i+2)];
                 
                 ofSetColor(*(triangulatedMesh.getColorsPointer()+i/3));
-                           
                 ofTriangle(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z);
             }
             
-            
+            //maybe put this on a toggle?
             /*
+            ofBlendMode(OF_BLENDMODE_ADD);
+            triangulatedMesh.clearColors();
             player.getVideoPlayer().getTextureReference().bind();
-            ofEnableAlphaBlending();
             ofSetColor(255, 255, 255, 100);
             triangulatedMesh.draw();
-            triangulatedMesh.drawFaces();
-            ofSetLineWidth(4);
-            ofBlendMode(OF_BLENDMODE_ADD);
-            triangulatedMesh.drawWireframe();
             player.getVideoPlayer().getTextureReference().unbind();
-            */
-            
+             */
             
             glDisable(GL_DEPTH_TEST);
             ofPopStyle();
@@ -282,7 +244,7 @@ void testApp::draw(){
             renderFBO.end();
             
             renderFBO.getTextureReference().draw(triangulatedRect);
-            cout << cam.getPosition() <<cam.getOrientationEuler()<< endl;
+           // cout << cam.getPosition() <<cam.getOrientationEuler()<< endl;
             
         }
     }
@@ -294,36 +256,34 @@ void testApp::draw(){
         ofScale(videoRect.width / player.getVideoPlayer().getWidth(), 
                 videoRect.height / player.getVideoPlayer().getHeight());
         ofPushStyle();
-
+        
         //argh getIndicies might be hella slow, you really want the pointer.
         for( int i=0; i<dTriangles.triangleMesh.getIndices().size(); i+=3 )
         {
             float centerX, centerY;
             int colorIndex;
-
-            
-            //oh god, this may be absolutely catestrophic
-            //should find a cleaner way to do this
             ofVec3f a = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i)];
             ofVec3f b = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+1)];
             ofVec3f c = dTriangles.triangleMesh.getVerticesPointer()[*(dTriangles.triangleMesh.getIndexPointer()+i+2)];
-            
             centerX = (a.x + b.x + c.x)/3;
             centerY = (a.y + b.y + c.y)/3;
-            
             ofFill();
             ofColor triColor = colorSample(centerX, centerY);
             //eh don't do this until its on a slider, probably not worth it
-            //triColor.setSaturation(triColor.getSaturation() + 10);
-            
+            //triColor.setSaturation(triColor.getSaturation() + 10);     
             ofSetColor(triColor);
             ofTriangle(a.x,a.y,b.x,b.y,c.x,c.y);
-        }
-        
+        } 
         ofPopStyle();
         ofPopMatrix();
     }
     if(trackerDraw){
+        ofPushMatrix();
+        ofTranslate(videoRect.x, videoRect.y);
+        ofScale(videoRect.width / player.getVideoPlayer().getWidth(), 
+                videoRect.height / player.getVideoPlayer().getHeight());
+        ofPushStyle();
+
         ofSetLineWidth(1);
         if(!useTrackedPoints){
             for(ofPoint p : featurePoints)
@@ -333,21 +293,32 @@ void testApp::draw(){
             if(tracker.existsPrevious(curIndex)){
                 cv::Point2f& prev = tracker.getPrevious(curIndex);
                 cv::Point2f& cur = tracker.getCurrent(curIndex);
-                
                 ofSetColor(255,0, (curIndex%255));
                 ofLine(prev.x, prev.y, cur.x, cur.y);
             }
         }
+        ofPopStyle();
+        ofPopMatrix();
     }
-    else if(particleDraw){
+    
+    else if(particleDraw)
         particles.draw();
-    }
     
     ofPopMatrix();
-    
     ofSetColor(255);
-    
+
+    //render out images files of each frame.
+    if(renderMode){
+       // ofImage saveImage;
+        //renderFBO.getTextureReference().readToPixels(saveImage.getPixelsRef());
+        char filename[1024];
+        sprintf(filename, "videoframe_%05d.png", player.getVideoPlayer().getCurrentFrame());
+        ofSaveViewport(filename);
+       // saveImage.saveImage(filename);
+    }   
 }
+
+//--------------------------------------------------------------
 
 //minDist should be (simplify/2)^2
 void testApp::createTriangleMesh(float minDist){
@@ -369,8 +340,8 @@ void testApp::createTriangleMesh(float minDist){
                 closestTexCoordIndex = j;
             }
             //escape if its closer than a minDist so we don't search anymore
-           // if(texCoordDist < minDist)
-            //    break;
+            if(texCoordDist < minDist)
+                break;
         }
         //copy found verticies into our mesh
         ofVec3f vert = meshBuilder.getMesh().getVertex(closestTexCoordIndex);
@@ -407,7 +378,7 @@ void testApp::createTriangleMesh(float minDist){
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i));
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+1));
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+2));
-
+        
     }
     
 }
@@ -427,10 +398,9 @@ void testApp::calculateRects(){
     float rectWidth = ofGetWidth()/2;
     float rectHeight = ofGetWidth()/2 * (9./16.);
     videoRect = ofRectangle(rectWidth-vidOffsetX,0,rectWidth,rectHeight);
-    meshRect = ofRectangle(rectWidth-vidOffsetX,rectHeight,rectWidth,rectHeight);
-	triangulatedRect = ofRectangle(vidOffsetX +10, rectHeight + 10, 
-                                   ofGetWidth()-vidOffsetX, 
-                                   (ofGetWidth()-vidOffsetX)*(9./16.));
+    meshRect = ofRectangle(rectWidth-vidOffsetX,rectHeight+10,rectWidth,rectHeight);
+    triangulatedRect = ofRectangle(rectWidth-vidOffsetX,rectHeight*2+20,rectWidth,rectHeight);
+    
     renderFBO.allocate(rectWidth, rectHeight, GL_RGB, 4);
     previewFBO.allocate(rectWidth, rectHeight, GL_RGB, 4);
 }
@@ -494,14 +464,23 @@ void testApp::guiSetup(){
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 50, persistance, "tracked point persistance"));
     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 100, age, " tracked point age"));
     
-    //Particle control
-    gui->addWidgetDown(new ofxUILabel("PARTICLE CONTROL", OFX_UI_FONT_LARGE));
+    //Render + 3D
+    gui->addWidgetDown(new ofxUILabel("RENDER", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
-    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, particleDraw, "draw particle mesh", OFX_UI_FONT_MEDIUM));
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 1000, featureMax, "number of particles")); 
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 10, maxSpeed, "max particle speed")); 
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, .001, 1, rep, "repulsion")); 
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 380, maxDist, "max pull distance")); 
+    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, renderMode, "save frames", OFX_UI_FONT_MEDIUM));
+    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, -.15, .15, xShift, "xShift"));
+    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, -.15, .15, yShift, "yShift"));
+    
+    /*
+     //Particle control
+     gui->addWidgetDown(new ofxUILabel("PARTICLE CONTROL", OFX_UI_FONT_LARGE));
+     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
+     gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, particleDraw, "draw particle mesh", OFX_UI_FONT_MEDIUM));
+     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 1000, featureMax, "number of particles")); 
+     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 10, maxSpeed, "max particle speed")); 
+     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, .001, 1, rep, "repulsion")); 
+     gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 380, maxDist, "max pull distance")); 
+     */
     
     ofAddListener(gui->newGUIEvent,this,&testApp::guiEvent);
     
@@ -603,6 +582,20 @@ void testApp::guiEvent(ofxUIEventArgs &e){
         useTrackedPoints = true;
         cout << "tracked flipped" << endl;
     }
+    else if(name == "save frames"){
+        ofxUILabelToggle *toggle = (ofxUILabelToggle *) e.widget;
+        renderMode = toggle->getValue();
+    }
+    else if(name == "xShift")
+	{
+		ofxUISlider *slider = (ofxUISlider *) e.widget; 
+        xShift = (slider->getScaledValue());
+	}
+    else if(name == "yShift")
+	{
+		ofxUISlider *slider = (ofxUISlider *) e.widget; 
+        yShift = (slider->getScaledValue());
+	}
     
 }
 
@@ -650,6 +643,48 @@ ofColor testApp::colorSample(int x, int  y){
     
     return ofColor(r, g, b);
 }
+
+//--------------------------------------------------------------
+bool testApp::loadNewScene(){
+    ofFileDialogResult r = ofSystemLoadDialog("Select a Scene", true);
+    if(r.bSuccess){
+        return loadScene(r.getPath());
+    }
+    return false;
+}
+
+bool testApp::loadDefaultScene(){
+    ofxXmlSettings settings;
+    if(settings.loadFile("RGBDSimpleSceneDefaults.xml")){
+        if(!loadScene(settings.getValue("defaultScene", ""))){
+            return loadNewScene();
+        }
+        return true;
+    }
+    return loadNewScene();
+}
+
+bool testApp::loadScene(string takeDirectory){
+    //use the low res, high kills my machine
+    if(player.setup(takeDirectory, false)){
+        ofxXmlSettings settings;
+        settings.loadFile("RGBDSimpleSceneDefaults.xml");
+        settings.setValue("defaultScene", player.getScene().mediaFolder);
+        settings.saveFile();
+        
+        meshBuilder.setup(player.getScene().calibrationFolder);
+        
+        //populate
+        player.getVideoPlayer().setPosition(.5);
+        player.update();
+        
+        meshBuilder.setXYShift(player.getXYShift());
+        meshBuilder.updateMesh(player.getDepthPixels());
+        
+        return true;
+    }
+    return false;
+}
 //--------------------------------------------------------------
 void testApp::keyReleased(int key){
     
@@ -667,7 +702,7 @@ void testApp::mouseDragged(int x, int y, int button){
 
 //--------------------------------------------------------------
 void testApp::mousePressed(int x, int y, int button){
-  //  particles.addVerticies(1, maxSpeed, ofVec3f(mouseX, mouseY, 0));
+    //  particles.addVerticies(1, maxSpeed, ofVec3f(mouseX, mouseY, 0));
 }
 
 //--------------------------------------------------------------
