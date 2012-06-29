@@ -29,15 +29,14 @@ void testApp::setup(){
     vidOffsetY = 100;
     labelOffset = 20;
     
-    //random stuff from James' code that I need to figure out what they do
     renderMode = false; 
     farClip = 1245; //this should be on a slider TODO
     xShift = 0;
     yShift = 0;
     
     calculateRects();
-    //loadDefaultScene();
-    loadNewScene();
+    loadDefaultScene();
+    //loadNewScene();
     
     /*--------Feature Detection-----------*/
     featureMax = 1500;
@@ -69,6 +68,26 @@ void testApp::setup(){
     
     guiSetup();    
     ofEnableSmoothing(); 
+    ofSetSmoothLighting(true);
+    
+    /*--------Lights-----------*/
+    
+    for(int i=0; i<5; i++){
+        float seed = ofRandom(0.1, TWO_PI);
+        float colorSeed = ofRandom(10,255);
+        ofLight* light = new ofLight;
+        ofColor lightColor = ofColor(0.f, colorSeed, colorSeed);
+        light->setDirectional();
+        
+        lightColor.setBrightness( 180.f );
+        lightColor.setSaturation( 150.f );
+        light->setPosition(ofVec3f(cos(seed)*100, 300.0, sin(seed)*100));
+        light->setDiffuseColor( lightColor );
+      //  light->setSpecularColor( ofColor(255.f, 255.f, 255.f));
+        
+        //set diffuse and specular maybe?
+        lights.push_back(light);
+    }
 }
 
 //--------------------------------------------------------------
@@ -172,15 +191,30 @@ void testApp::draw(){
         player.getVideoPlayer().draw(videoRect);
         
         //draw standard generated mesh
+        
         previewFBO.begin();
         ofClear(0,0,0,0);
         cam.begin();
+        ofEnableLighting();
         glEnable(GL_DEPTH_TEST);
+        
+       // ofPushMatrix();
+        //ofScale(1, -1, 1);
+        for(ofLight* l : lights){
+            l->enable();
+            ofSphere(l->getPosition().x, l->getPosition().y, l->getPosition().z, 10);
+        }
+      //  ofPopMatrix();
+        
         meshBuilder.draw(player.getVideoPlayer());
+    
+       
         glDisable(GL_DEPTH_TEST);
+         ofDisableLighting();
         cam.end();
         previewFBO.end();
         previewFBO.getTextureReference().draw(meshRect);
+        
         
         
         //...2D with feature overlay
@@ -227,7 +261,7 @@ void testApp::draw(){
                 ofTriangle(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z);
             }
             
-            //maybe put this on a toggle?
+            //maybe put this on a toggle? overlays the texture onto the abstraction
             /*
             ofBlendMode(OF_BLENDMODE_ADD);
             triangulatedMesh.clearColors();
@@ -244,8 +278,6 @@ void testApp::draw(){
             renderFBO.end();
             
             renderFBO.getTextureReference().draw(triangulatedRect);
-           // cout << cam.getPosition() <<cam.getOrientationEuler()<< endl;
-            
         }
     }
     
@@ -374,13 +406,19 @@ void testApp::createTriangleMesh(float minDist){
         ofColor triColor = colorSample(centerX, centerY);
         
         triangulatedMesh.addColor(triColor);
-        
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i));
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+1));
         triangulatedMesh.addIndex(dTriangles.triangleMesh.getIndex(i+2));
         
+        ofVec3f posA = triangulatedMesh.getVerticesPointer()[i];
+        ofVec3f posB = triangulatedMesh.getVerticesPointer()[(i+1)];
+        ofVec3f posC = triangulatedMesh.getVerticesPointer()[(i+2)];
+        
+        ofVec3f norm = (posA - posC).getCrossed(posB - posC).getNormalized();
+        triangulatedMesh.addNormal(norm);
+        triangulatedMesh.addNormal(norm);
+        triangulatedMesh.addNormal(norm);
     }
-    
 }
 
 /*-------------------------------------------------*
@@ -392,7 +430,8 @@ vector<ofPoint> testApp::featureDetect(){
 }
 
 /*-------------------------------------------------*
- JG bleeeh
+ Calculate the rectangles for each of the video
+ frames so they fit somewhat nicely on the screen
  *-------------------------------------------------*/
 void testApp::calculateRects(){
     float rectWidth = ofGetWidth()/2;
@@ -414,13 +453,6 @@ void testApp::keyPressed(int key){
     if(key == ' '){
         player.togglePlay();
     }
-    /*    if( key == ' '){
-     if(video.isPlaying())
-     video.stop();
-     else {
-     video.play();
-     }
-     }*/
 }
 
 //--------------------------------------------------------------
@@ -434,7 +466,8 @@ void testApp::exit()
 
 void testApp::guiSetup(){
     float dim = 16;
-    
+    ofColor c = ofColor(130,255,255);
+    //ofColor c = ofColor(255,9,75);
     //huge gui setup, put in clean seperate function later
     
     //ofxUi doesn't update your variables for you, so if you add any extra toggles,
@@ -444,32 +477,37 @@ void testApp::guiSetup(){
     names.push_back("tracker points");
     
     gui = new ofxUICanvas(0,0,vidOffsetX, ofGetHeight());
-    gui->addWidgetDown(new ofxUIRadio( dim, dim, "point arrays", names, OFX_UI_ORIENTATION_HORIZONTAL));
+    ofxUIWidget *w = gui->addWidgetDown(new ofxUIRadio( dim, dim, "point arrays", names, OFX_UI_ORIENTATION_HORIZONTAL));
+    w->setColorFill(c);
     
     //Feature Detection panel
     gui->addWidgetDown(new ofxUILabel("FEATURE DETECTION", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
     gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, featureDraw, "draw feature mesh", OFX_UI_FONT_MEDIUM));
     gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, triDraw, "draw triangulation", OFX_UI_FONT_MEDIUM));
-    gui->addWidgetDown(new ofxUIRotarySlider(dim*4, 50, 5000, featureMax, "max number of features")); 
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0.001, 0.02, featureQuality, "feature quality")); 
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 30, featureMinDist, "feature distance"));
+    w = gui->addWidgetDown(new ofxUIRotarySlider(dim*6, 50, 5000, featureMax, "max number of features")); 
+    w->setColorFill(c);
+   // w->setColorBack(ofColor(130,255,255));
+    w =gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0.001, 0.02, featureQuality, "feature quality")); 
+    w->setColorFill(c);
+    w =gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 1, 30, featureMinDist, "feature distance"));
+    w->setColorFill(c);
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
+
     
     //Tracker panel
     gui->addWidgetDown(new ofxUILabel("TRACKER", OFX_UI_FONT_LARGE));
-    gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
-    gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, trackerDraw, "draw tracked points", OFX_UI_FONT_MEDIUM));
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 100, trackerMaxDist, "max tracked distance"));
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 50, persistance, "tracked point persistance"));
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 100, age, " tracked point age"));
+    w=gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
+    w=gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, trackerDraw, "draw tracked points", OFX_UI_FONT_MEDIUM));w->setColorFill(c);
+    w=gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 100, trackerMaxDist, "max tracked distance"));w->setColorFill(c);
+    w=gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, 0, 50, persistance, "tracked point persistance"));w->setColorFill(c);
     
     //Render + 3D
     gui->addWidgetDown(new ofxUILabel("RENDER", OFX_UI_FONT_LARGE));
     gui->addWidgetDown(new ofxUISpacer(vidOffsetX - labelOffset, 2)); 
     gui->addWidgetDown(new ofxUILabelToggle(vidOffsetX-labelOffset, renderMode, "save frames", OFX_UI_FONT_MEDIUM));
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, -.15, .15, xShift, "xShift"));
-    gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, -.15, .15, yShift, "yShift"));
+    w=gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, -.15, .15, xShift, "xShift"));w->setColorFill(c);
+    w=gui->addWidgetDown(new ofxUISlider(vidOffsetX-labelOffset, dim, -.15, .15, yShift, "yShift"));w->setColorFill(c);
     
     /*
      //Particle control
@@ -493,9 +531,9 @@ void testApp::guiSetup(){
     //gui2 = new ofxUICanvas(vidOffsetX, ofGetHeight()-100, ofGetScreenWidth(), ofGetScreenHeight());
     
     gui->addWidgetDown(new ofxUILabel("Feature Points", OFX_UI_FONT_MEDIUM));
-    fpSize = (ofxUIMovingGraph *) gui->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 1500, "feature points size")); 
+    fpSize = (ofxUIMovingGraph *) gui->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 5000, "feature points size")); 
     gui->addWidgetDown(new ofxUILabel("Tracked Points", OFX_UI_FONT_MEDIUM));
-    tpSize = (ofxUIMovingGraph *) gui->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 1500, "tracker points size")); 
+    tpSize = (ofxUIMovingGraph *) gui->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 5000, "tracker points size")); 
     
 }
 //--------------------------------------------------------------

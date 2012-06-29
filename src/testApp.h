@@ -74,6 +74,11 @@ public:
     int renderedVidoeFrame;
     
     /*----------------------------------*
+     Graphics
+     *----------------------------------*/
+    vector<ofLight*> lights;
+    
+    /*----------------------------------*
      Feature Detection
      *----------------------------------*/
     vector<ofPoint> featureDetect();
