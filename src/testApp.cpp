@@ -36,8 +36,8 @@ void testApp::setup(){
     yShift = 0;
     
     calculateRects();
-    loadDefaultScene();
-    //loadNewScene();
+    //loadDefaultScene();
+    loadNewScene();
     
     /*--------Feature Detection-----------*/
     featureMax = 1500;
