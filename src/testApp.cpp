@@ -81,7 +81,7 @@ void testApp::setup(){
         
         lightColor.setBrightness( 180.f );
         lightColor.setSaturation( 150.f );
-        light->setPosition(ofVec3f(cos(seed)*100, 300.0, sin(seed)*100));
+        light->setPosition(ofVec3f(cos(seed)*100, 0, sin(seed)*100));
         light->setDiffuseColor( lightColor );
       //  light->setSpecularColor( ofColor(255.f, 255.f, 255.f));
         
@@ -177,8 +177,8 @@ void testApp::update(){
     }
     
     /*------------update GUI-------------*/
-    fpSize->addPoint(featurePoints.size());
-    tpSize->addPoint(trackedPoints.size());
+   // fpSize->addPoint(featurePoints.size());
+    //tpSize->addPoint(trackedPoints.size());
     
     
 }
@@ -195,20 +195,8 @@ void testApp::draw(){
         previewFBO.begin();
         ofClear(0,0,0,0);
         cam.begin();
-        ofEnableLighting();
         glEnable(GL_DEPTH_TEST);
-        
-       // ofPushMatrix();
-        //ofScale(1, -1, 1);
-        for(ofLight* l : lights){
-            l->enable();
-            ofSphere(l->getPosition().x, l->getPosition().y, l->getPosition().z, 10);
-        }
-      //  ofPopMatrix();
-        
         meshBuilder.draw(player.getVideoPlayer());
-    
-       
         glDisable(GL_DEPTH_TEST);
          ofDisableLighting();
         cam.end();
@@ -242,13 +230,18 @@ void testApp::draw(){
             ofScale(1,-1, 1);
             glEnable(GL_DEPTH_TEST);
             
+            ofEnableLighting();        
             //  glShadeModel(GL_FLAT);
             ofEnableAlphaBlending();
-            ofSetColor(255, 255, 255, 100);
             
+            for(ofLight* l : lights){
+                l->enable();
+                ofSphere(l->getPosition().x, l->getPosition().y, l->getPosition().z, 10);
+            }
+
+            ofSetColor(255, 255, 255, 100);
             unsigned char * imgPixels;
-            imgPixels= img.getPixels();
-               
+            imgPixels= img.getPixels();       
             for( int i=0; i<triangulatedMesh.getIndices().size(); i+=3 ){
                 float centerX, centerY;
                 int colorIndex;
@@ -272,6 +265,7 @@ void testApp::draw(){
              */
             
             glDisable(GL_DEPTH_TEST);
+            ofDisableLighting();
             ofPopStyle();
             ofPopMatrix();
             cam.end();
@@ -523,7 +517,7 @@ void testApp::guiSetup(){
     ofAddListener(gui->newGUIEvent,this,&testApp::guiEvent);
     
     //debugging graphs to see the size of the tracked points/the feature points frame by frame
-    int bufferSize = 256; 
+  /*  int bufferSize = 256; 
     vector<float> buffer; 
     for(int i = 0; i < bufferSize; i++)
         buffer.push_back(0);
@@ -533,7 +527,7 @@ void testApp::guiSetup(){
     gui->addWidgetDown(new ofxUILabel("Feature Points", OFX_UI_FONT_MEDIUM));
     fpSize = (ofxUIMovingGraph *) gui->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 5000, "feature points size")); 
     gui->addWidgetDown(new ofxUILabel("Tracked Points", OFX_UI_FONT_MEDIUM));
-    tpSize = (ofxUIMovingGraph *) gui->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 5000, "tracker points size")); 
+    tpSize = (ofxUIMovingGraph *) gui->addWidgetDown(new ofxUIMovingGraph(vidOffsetX-labelOffset, 64, buffer, bufferSize, 0, 5000, "tracker points size")); */
     
 }
 //--------------------------------------------------------------
